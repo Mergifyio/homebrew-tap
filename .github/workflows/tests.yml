@@ -15,7 +15,10 @@ jobs:
     if: github.event.pull_request.draft == false
     strategy:
       matrix:
-        os: [ macos-15-intel, macos-26 ]
+        # macOS arm64 only — Homebrew no longer ships Intel-macOS bottles for
+        # our deps (pydantic/libyaml/rust stop at sonoma), so macos-15-intel
+        # can't be bottled. Intel Macs install via source build.
+        os: [ macos-26 ]
         include:
           - os: ubuntu-latest
             container: ghcr.io/homebrew/brew:main
