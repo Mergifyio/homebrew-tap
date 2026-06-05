@@ -7,6 +7,13 @@ class MergifyCli < Formula
   sha256 "65fb1cd20622bf50fb3a986999413067ab98f597f312d72ef001ad561917a6e7"
   license "Apache-2.0"
 
+  bottle do
+    root_url "https://ghcr.io/v2/mergifyio/tap"
+    sha256 cellar: :any, arm64_tahoe:  "74201bd7571d72d0a2ccaf138ef031aaaf792cb18d1bf0b0f398d9eb8bfb18c2"
+    sha256 cellar: :any, arm64_linux:  "52be8507f5f74724b61dff16976ddf8c499db2a42eac4493c47849e6a13281e5"
+    sha256 cellar: :any, x86_64_linux: "74f3b2cd3b76f2f351c429ee2a3a64f8b961bd5c25c6d06c4df3b590451ac71c"
+  end
+
   depends_on "rust" => :build          # builds rpds-py (via jsonschema) from sdist
   depends_on "certifi" => :no_linkage  # reuse core bottle
   depends_on "libyaml"                 # pyyaml C extension
