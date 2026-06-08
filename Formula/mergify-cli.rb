@@ -3,17 +3,9 @@ class MergifyCli < Formula
 
   desc "CLI for stacked PRs, CI insights, merge queue, freezes, and config"
   homepage "https://mergify.com"
-  url "https://files.pythonhosted.org/packages/11/1b/23f6467f329beaff22cc20688bd608dc432cafb96069d0963c3b18018fd6/mergify_cli-2026.6.5.1.tar.gz"
-  sha256 "65fb1cd20622bf50fb3a986999413067ab98f597f312d72ef001ad561917a6e7"
+  url "https://files.pythonhosted.org/packages/dc/96/2e77419d00b716649dc2ea7a63562f2d697a7f6999aaba832e01883f19ea/mergify_cli-2026.6.8.1.tar.gz"
+  sha256 "52975c6f0211c9c85b3281c8b8a215122d24b2b1ba95d4b0f411dc4dbeec1c82"
   license "Apache-2.0"
-  revision 1
-
-  bottle do
-    root_url "https://ghcr.io/v2/mergifyio/tap"
-    sha256 cellar: :any, arm64_tahoe:  "74201bd7571d72d0a2ccaf138ef031aaaf792cb18d1bf0b0f398d9eb8bfb18c2"
-    sha256 cellar: :any, arm64_linux:  "52be8507f5f74724b61dff16976ddf8c499db2a42eac4493c47849e6a13281e5"
-    sha256 cellar: :any, x86_64_linux: "74f3b2cd3b76f2f351c429ee2a3a64f8b961bd5c25c6d06c4df3b590451ac71c"
-  end
 
   depends_on "rust" => :build          # builds rpds-py (via jsonschema) from sdist
   depends_on "certifi" => :no_linkage  # reuse core bottle
