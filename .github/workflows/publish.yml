@@ -1,51 +1,72 @@
-name: brew pr-pull
+name: publish bottles
+
+# Publish bottles AFTER a PR is merged, from trusted `main` — never from a
+# still-open PR. The old flow ran `brew pr-pull` on a `pr-pull` label
+# (pull_request_target), which published whatever the PR head was at publish
+# time: an author could push unreviewed code after approval and have it
+# published privileged. Here the trigger is the merge itself, so we only ever
+# publish the commit that was reviewed and merged.
+#
+# SECURITY DEPENDS ON the `main` ruleset requiring a pull request + approval
+# AND "dismiss stale approvals when new commits are pushed" — that guarantees
+# the merged commit is the reviewed one.
 
 on:
-  pull_request_target:
-    types:
-      - labeled
+  push:
+    branches:
+      - main
 
-# Serialize publishes: brew pr-pull pushes to main, so two concurrent runs
-# would race on that push. Never cancel an in-progress publish mid-push.
+# Serialize publishes: this pushes the bottle commit to main, so two merges in
+# quick succession must not race on that push. Never cancel a publish mid-push.
 concurrency:
-  group: pr-pull
+  group: publish
   cancel-in-progress: false
 
 jobs:
-  pr-pull:
-    if: contains(github.event.pull_request.labels.*.name, 'pr-pull')
+  publish:
     runs-on: ubuntu-latest
     permissions:
-      actions: read
-      checks: read
-      contents: write
-      issues: read
-      packages: write
-      pull-requests: write
+      contents: write       # push the bottle commit to main
+      packages: write       # upload bottles to GHCR
+      pull-requests: read    # find the merged PR for this commit
     steps:
+      - name: Find the merged PR for this commit
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The PR that this push merged. For the bottle commit we push below
+          # (a direct push, not a PR merge) this is empty, so the job no-ops —
+          # which is what prevents a publish loop.
+          num=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq '.[0].number // empty')
+          echo "number=${num}" >> "$GITHUB_OUTPUT"
+          if [ -n "$num" ]; then echo "Merged PR: #$num"; else echo "No PR for this commit — nothing to publish."; fi
+
       - name: Set up Homebrew
+        if: steps.pr.outputs.number != ''
         uses: Homebrew/actions/setup-homebrew@d0dd492210067c1b5f8857ab6c5dd52c29944e44 # main
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up git
+        if: steps.pr.outputs.number != ''
         uses: Homebrew/actions/git-user-config@d0dd492210067c1b5f8857ab6c5dd52c29944e44 # main
 
-      - name: Pull bottles
+      - name: Pull bottles from the merged PR onto main
+        if: steps.pr.outputs.number != ''
         env:
           HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_GITHUB_PACKAGES_USER: ${{ github.repository_owner }}
-          PULL_REQUEST: ${{ github.event.pull_request.number }}
-        run: brew pr-pull --tap="$GITHUB_REPOSITORY" "$PULL_REQUEST"
+          PR: ${{ steps.pr.outputs.number }}
+        # --no-cherry-pick: the PR's formula commit is already on main (merged),
+        # so don't re-apply it — just download the PR's bottle artifacts, add the
+        # bottle block, and upload the bottles to GHCR.
+        run: brew pr-pull --no-cherry-pick --tap="$GITHUB_REPOSITORY" "$PR"
 
-      - name: Push commits
+      - name: Push bottle commit
+        if: steps.pr.outputs.number != ''
         uses: Homebrew/actions/git-try-push@d0dd492210067c1b5f8857ab6c5dd52c29944e44 # main
         with:
           branch: main
-
-      - name: Delete branch
-        if: github.event.pull_request.head.repo.fork == false
-        env:
-          BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: git push --delete origin "$BRANCH"
