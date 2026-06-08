@@ -15,6 +15,11 @@ on:
   push:
     branches:
       - main
+    # Only formula merges produce bottles. The bottle commit we push also
+    # touches Formula/**, but the "find merged PR" step returns empty for that
+    # direct push, so it no-ops (no loop).
+    paths:
+      - Formula/**
 
 # Serialize publishes: this pushes the bottle commit to main, so two merges in
 # quick succession must not race on that push. Never cancel a publish mid-push.
@@ -26,9 +31,12 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: write       # push the bottle commit to main
-      packages: write       # upload bottles to GHCR
-      pull-requests: read    # find the merged PR for this commit
+      actions: read          # brew pr-pull downloads the PR's bottle artifacts
+      checks: read
+      contents: write        # push the bottle commit to main
+      issues: read
+      packages: write        # upload bottles to GHCR
+      pull-requests: write   # find / annotate the merged PR
     steps:
       - name: Find the merged PR for this commit
         id: pr
