@@ -3,8 +3,8 @@ class MergifyCli < Formula
 
   desc "CLI for stacked PRs, CI insights, merge queue, freezes, and config"
   homepage "https://mergify.com"
-  url "https://files.pythonhosted.org/packages/11/1b/23f6467f329beaff22cc20688bd608dc432cafb96069d0963c3b18018fd6/mergify_cli-2026.6.5.1.tar.gz"
-  sha256 "65fb1cd20622bf50fb3a986999413067ab98f597f312d72ef001ad561917a6e7"
+  url "https://files.pythonhosted.org/packages/6e/07/c1e13c3f56ee6998909b4513215a6f6a0032829e9bd39c399b5ad07228ab/mergify_cli-2026.6.4.1.tar.gz"
+  sha256 "e1b878f4650c999f5d3f2831e0aede318c2e67fc0c986e335225b2d6f0f82cb4"
   license "Apache-2.0"
 
   bottle do
