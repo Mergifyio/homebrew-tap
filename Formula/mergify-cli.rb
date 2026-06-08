@@ -6,6 +6,7 @@ class MergifyCli < Formula
   url "https://files.pythonhosted.org/packages/11/1b/23f6467f329beaff22cc20688bd608dc432cafb96069d0963c3b18018fd6/mergify_cli-2026.6.5.1.tar.gz"
   sha256 "65fb1cd20622bf50fb3a986999413067ab98f597f312d72ef001ad561917a6e7"
   license "Apache-2.0"
+  revision 1
 
   bottle do
     root_url "https://ghcr.io/v2/mergifyio/tap"
