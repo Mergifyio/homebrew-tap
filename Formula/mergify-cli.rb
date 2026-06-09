@@ -6,6 +6,7 @@ class MergifyCli < Formula
   url "https://files.pythonhosted.org/packages/dc/96/2e77419d00b716649dc2ea7a63562f2d697a7f6999aaba832e01883f19ea/mergify_cli-2026.6.8.1.tar.gz"
   sha256 "52975c6f0211c9c85b3281c8b8a215122d24b2b1ba95d4b0f411dc4dbeec1c82"
   license "Apache-2.0"
+  revision 1
 
   depends_on "rust" => :build          # builds rpds-py (via jsonschema) from sdist
   depends_on "certifi" => :no_linkage  # reuse core bottle
