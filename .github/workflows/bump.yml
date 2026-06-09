@@ -1,0 +1,131 @@
+name: autobump
+
+# Polls PyPI for new mergify-cli releases and opens a DRAFT bump PR.
+# A maintainer reviews it and marks it "Ready for review" (which triggers the
+# bottle build); once green and approved, merging it triggers the post-merge
+# publish (publish.yml runs `brew pr-upload`). The draft + default GITHUB_TOKEN
+# means no bot token is needed: the maintainer's "ready" and "merge" actions
+# are what trigger the downstream workflows.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# One bump at a time: runs share the deterministic autobump/<version> branch,
+# so overlapping schedule/dispatch runs must not race on the push/PR.
+concurrency:
+  group: autobump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tap
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Resolve versions + sdist
+        id: v
+        run: |
+          set -euo pipefail
+          current=$(grep -oE 'mergify_cli-[0-9._]+\.tar\.gz' Formula/mergify-cli.rb | head -1 | sed -E 's/mergify_cli-(.*)\.tar\.gz/\1/')
+          # Fetch the PyPI metadata ONCE and read the latest version + sdist
+          # url/sha from it. Command substitution (not `< <(...)`) so a curl or
+          # python failure propagates under `set -o pipefail` and aborts the step.
+          meta=$(curl -fsSL https://pypi.org/pypi/mergify-cli/json | python3 -c '
+          import sys,json
+          d=json.load(sys.stdin); v=d["info"]["version"]
+          f=next(x for x in d["releases"][v] if x["packagetype"]=="sdist")
+          print(v, f["url"], f["digests"]["sha256"])')
+          read -r latest url sha <<<"$meta"
+          {
+            echo "latest=$latest"
+            echo "current=$current"
+            echo "url=$url"
+            echo "sha=$sha"
+            if [ "$latest" = "$current" ]; then echo "changed=false"; else echo "changed=true"; fi
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update formula version + sdist url/sha
+        if: steps.v.outputs.changed == 'true'
+        env:
+          NEW_URL: ${{ steps.v.outputs.url }}
+          NEW_SHA: ${{ steps.v.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # Rewrite the main url + sha256, and drop the stale bottle block and
+          # any `revision`: publishing is post-merge via `brew pr-upload`, which
+          # regenerates the bottle block from the freshly built bottles, and a
+          # new version resets the rebuild count. We deliberately do NOT run
+          # `brew update-python-resources` here: it refuses releases younger
+          # than ~24h, and the bump always targets a just-published release.
+          # Deps are pinned in mergify-cli's pyproject and change rarely; if a
+          # release DID change deps, the PR's bottle build fails and a maintainer
+          # regenerates resources before marking it ready.
+          python3 - "$NEW_URL" "$NEW_SHA" <<'PY'
+          import re,sys
+          url,sha=sys.argv[1],sys.argv[2]
+          p="Formula/mergify-cli.rb"; s=open(p).read()
+          s=re.sub(r'url "[^"]*mergify_cli-[^"]*\.tar\.gz"', f'url "{url}"', s, count=1)
+          s=re.sub(r'sha256 "[0-9a-f]{64}"', f'sha256 "{sha}"', s, count=1)
+          s=re.sub(r'^  revision \d+\n', '', s, flags=re.M)
+          s=re.sub(r'^  bottle do\n.*?^  end\n', '', s, flags=re.M|re.S)
+          s=re.sub(r'\n{3,}', '\n\n', s)
+          open(p,"w").write(s)
+          PY
+
+      - name: Open draft bump PR
+        if: steps.v.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW: ${{ steps.v.outputs.latest }}
+        run: |
+          set -euo pipefail
+          branch="autobump/$NEW"
+
+          # If a bump PR for this version is already open, leave it alone — don't
+          # force-push and reset its review state / re-trigger the bottle build.
+          if gh pr view "$branch" --json state --jq .state 2>/dev/null | grep -qx OPEN; then
+            echo "PR for $branch already open; nothing to do."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add Formula/mergify-cli.rb
+          # Guard against a no-op rewrite (changed=true but identical content):
+          # `git commit` would otherwise fail the step under `set -e`.
+          if git diff --cached --quiet; then
+            echo "Formula already up to date; nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore: mergify-cli $NEW"
+          git push -u origin "$branch" --force
+
+          # No `|| true` mask: a real failure (auth, rate-limit, ruleset) must
+          # surface. The "already open" case is handled by the check above.
+          gh pr create --draft --head "$branch" --base main \
+            --title "autobump: mergify-cli $NEW" \
+            --body "Automated bump to mergify-cli **$NEW**.
+
+          1. Review the diff (\`url\` + \`sha256\`; stale bottle block removed).
+          2. Mark **Ready for review** to build the bottles.
+          3. Once green and approved, **merge** — \`publish.yml\` publishes the bottles to GHCR automatically."
+
+          # Supersede older *draft* autobump PRs (leave any a maintainer already
+          # marked ready / is reviewing). Runs only after the new PR is created
+          # (set -e aborts above on failure). </dev/null so `gh pr close` can't
+          # consume the loop's stdin.
+          gh pr list --state open --json number,headRefName,isDraft \
+            --jq '.[] | select(.isDraft and (.headRefName | startswith("autobump/"))) | [.number, .headRefName] | @tsv' \
+          | while IFS=$'\t' read -r n ref; do
+              if [ -n "$ref" ] && [ "$ref" != "$branch" ]; then
+                gh pr close "$n" --delete-branch --comment "Superseded by mergify-cli $NEW ($branch)." </dev/null || true
+              fi
+            done
