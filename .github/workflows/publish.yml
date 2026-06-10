@@ -45,14 +45,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # The PR this push merged. Empty for the bottle commit we push below
-          # (a direct push, no associated PR) -> the job no-ops -> no loop.
+          # The PR this push merged. Empty for a direct push with no associated
+          # PR -> the job no-ops.
           num=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq '.[0].number // empty')
-          echo "number=${num}" >> "$GITHUB_OUTPUT"
           if [ -z "$num" ]; then
             echo "No PR for this commit — nothing to publish."
+            echo "number=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # Loop guard: when Mergify merges the bottle PR we open below, this
+          # workflow re-fires. Bottle PRs live on `bottle/*` -> no-op (no bottles
+          # to publish for an already-published bottle commit).
+          headref=$(gh pr view "$num" --repo "$GITHUB_REPOSITORY" --json headRefName --jq .headRefName)
+          case "$headref" in
+            bottle/*)
+              echo "Merged PR #${num} is a bottle PR (${headref}) — nothing to publish."
+              echo "number=" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+          echo "number=${num}" >> "$GITHUB_OUTPUT"
           head=$(gh pr view "$num" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
           run=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/tests.yml/runs?event=pull_request&head_sha=${head}" \
                 --jq '.workflow_runs[0].id // empty')
