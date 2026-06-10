@@ -15,14 +15,16 @@ name: publish bottles
 #
 # SECURITY: relies on the `main` ruleset requiring approval AND "dismiss stale
 # approvals when new commits are pushed", so the merged commit == the reviewed
-# one. No privileged `pull_request_target`; we only publish merged `main`.
+# one. We never push to main directly (the ruleset forbids it); the bottle
+# block lands via a `bottle/*` PR that Mergify auto-merges. No privileged
+# `pull_request_target`; we only publish merged `main`.
 
 on:
   push:
     branches:
       - main
-    # Only formula merges produce bottles. The bottle commit we push below also
-    # touches Formula/**, but "find merged PR" returns empty for it -> no loop.
+    # Only formula merges produce bottles. Mergify merging the bottle PR we
+    # open below also pushes to main; the loop guard below skips bottle/* PRs.
     paths:
       - Formula/**
 
@@ -35,9 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read          # download the merged PR's bottle artifacts
-      contents: write        # push the bottle commit to main
+      contents: write        # push the bottle branch + open the PR
       packages: write        # upload bottles to GHCR
-      pull-requests: read    # find the merged PR
+      pull-requests: write   # find the merged PR + open the bottle PR
     steps:
       - name: Resolve merged PR and its bottle build
         id: pr
@@ -104,8 +106,22 @@ jobs:
           HOMEBREW_GITHUB_PACKAGES_USER: ${{ github.repository_owner }}
         run: brew pr-upload --root-url="https://ghcr.io/v2/mergifyio/tap"
 
-      - name: Push bottle commit
+      - name: Open bottle PR for Mergify to auto-merge
         if: steps.pr.outputs.number != ''
-        uses: Homebrew/actions/git-try-push@d0dd492210067c1b5f8857ab6c5dd52c29944e44 # main
-        with:
-          branch: main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # `brew pr-upload` already committed the bottle block in the tap repo.
+          # Push that commit to a `bottle/*` branch (NOT main) and open a PR.
+          # Opening via GITHUB_TOKEN means this PR does NOT trigger tests.yml
+          # (no re-bottle). Mergify's `bottle` queue auto-merges it (no review).
+          branch="bottle/pr-${PR_NUMBER}-${RUN_ID}"
+          tap_name="${GITHUB_REPOSITORY/homebrew-/}"        # Mergifyio/tap
+          tap_dir="$(brew --repository "$tap_name")"
+          git -C "$tap_dir" push origin "HEAD:refs/heads/${branch}"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "chore: publish bottles for #${PR_NUMBER}" \
+            --body "Automated bottle upload for #${PR_NUMBER}. Auto-merged by Mergify (no review needed)."
