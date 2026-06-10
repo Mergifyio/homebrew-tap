@@ -1,40 +1,33 @@
-# Mergify is the ONLY actor allowed to merge to `main` (it is the sole ruleset
-# bypass actor). Two lanes:
-#   - default: human / autobump formula PRs — require approval + the 3 test-bot
-#     checks.
-#   - bottle: machine bottle PRs opened by publish.yml — already built and
-#     uploaded, so no review/CI; gated to bot-authored `bottle/*` branches.
-# A human cannot author a PR as github-actions[bot], so the no-review `bottle`
-# lane is unreachable by a human even on a `bottle/*`-named branch.
+# Dogfood Mergify on the tap. Humans approve formula PRs; the publish workflow's
+# machine bottle PRs (bot-authored, on bottle/*) auto-merge with no review.
+# Mergify is the only actor allowed to merge to main (it is the sole `main`
+# ruleset bypass actor). Modern idiom (per the monorepo): merge_protections
+# define the gate, auto_merge_conditions queues + merges once it passes.
 queue_rules:
   - name: default
-    merge_conditions:
-      - "check-success = test-bot (macos-26)"
-      - "check-success = test-bot (ubuntu-latest, ghcr.io/homebrew/brew:main)"
-      - "check-success = test-bot (ubuntu-24.04-arm, ghcr.io/homebrew/brew:main)"
+    queue_conditions:
+      - base = main
+    merge_method: squash
+    commit_message_template: |
+      {{ title }} (#{{ number }})
+
+      {{ body }}
+
+merge_protections:
+  - name: Review and CI required
+    # Applies to every PR EXCEPT bot-authored bottle PRs (already built; the
+    # formula change they carry was reviewed in its originating PR). A human
+    # cannot author a PR as github-actions[bot], so a human PR on a bottle/*
+    # branch is still gated here — the author check, not the branch name, is
+    # the security boundary.
+    if:
+      - not:
+          and:
+            - author = github-actions[bot]
+            - head ~= ^bottle/
+    success_conditions:
       - "#approved-reviews-by >= 1"
-    merge_method: merge
+      - check-success = all-green
 
-  - name: bottle
-    merge_conditions: []
-    merge_method: merge
-
-pull_request_rules:
-  - name: Queue approved formula PRs
-    conditions:
-      - "base = main"
-      - "-draft"
-      - "-head ~= ^bottle/"
-      - "#approved-reviews-by >= 1"
-    actions:
-      queue:
-        name: default
-
-  - name: Auto-queue machine bottle PRs
-    conditions:
-      - "base = main"
-      - "author = github-actions[bot]"
-      - "head ~= ^bottle/"
-    actions:
-      queue:
-        name: bottle
+merge_protections_settings:
+  auto_merge_conditions: true
