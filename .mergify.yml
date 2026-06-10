@@ -1,17 +1,19 @@
-# Dogfood Mergify on the tap. Humans approve formula PRs; the publish workflow's
-# machine bottle PRs (bot-authored, on bottle/*) auto-merge with no review.
-# Mergify is the only actor allowed to merge to main (it is the sole `main`
-# ruleset bypass actor). Modern idiom (per the monorepo): merge_protections
-# define the gate, auto_merge_conditions queues + merges once it passes.
+# Extends the org-shared Mergify config (Mergifyio/.github): conventional-commit
+# enforcement, conflict warnings, PR-description + review-thread checks,
+# dismiss-stale-approvals, and the default squash commit message (first-commit).
+#
+# Local additions dogfood the merge queue on the tap. Humans approve formula
+# PRs; the publish workflow's machine bottle PRs (bot-authored, on bottle/*)
+# auto-merge with no review. Mergify is the only actor allowed to merge to main
+# (it is the sole `main` ruleset bypass actor). merge_protections define the
+# gate; auto_merge_conditions queues + merges once it passes.
+extends: .github
+
 queue_rules:
   - name: default
     queue_conditions:
       - base = main
     merge_method: squash
-    commit_message_template: |
-      {{ title }} (#{{ number }})
-
-      {{ body }}
 
 merge_protections:
   - name: Review and CI required
@@ -30,4 +32,5 @@ merge_protections:
       - check-success = all-green
 
 merge_protections_settings:
+  reporting_method: deployments   # restated — local block replaces the inherited one
   auto_merge_conditions: true
