@@ -75,3 +75,20 @@ jobs:
         with:
           name: bottles_${{ matrix.os }}
           path: '*.bottle.*'
+
+  # Single, stable required check that gates merges (referenced by .mergify.yml
+  # and the main ruleset) instead of the brittle per-matrix `test-bot (...)`
+  # names. Green only when the whole test-bot matrix succeeds. Skipped on drafts
+  # (they can't merge); a non-draft PR whose test-bot was skipped — e.g. a human
+  # branch named bottle/* dodging the matrix — reports failure here and is
+  # blocked.
+  all-green:
+    name: all-green
+    if: always() && github.event.pull_request.draft == false
+    needs: [test-bot]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all test-bot jobs to succeed
+        run: |
+          echo "test-bot result: ${{ needs.test-bot.result }}"
+          [ "${{ needs.test-bot.result }}" = "success" ]
