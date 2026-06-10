@@ -10,9 +10,13 @@ on:
 
 jobs:
   test-bot:
-    # Skip draft PRs: don't burn the (paid, macOS-heavy) bottle matrix on
-    # every draft sync. Marking the PR ready (ready_for_review) builds it.
-    if: github.event.pull_request.draft == false
+    # Skip draft PRs (don't burn the paid matrix on every draft sync; marking
+    # the PR ready builds it) and bottle/* PRs (already built; opened by
+    # publish.yml — belt-and-suspenders, since GITHUB_TOKEN-opened PRs don't
+    # trigger workflows anyway).
+    if: >-
+      github.event.pull_request.draft == false &&
+      !startsWith(github.event.pull_request.head.ref, 'bottle/')
     strategy:
       matrix:
         # macOS arm64 only — Homebrew no longer ships Intel-macOS bottles for
