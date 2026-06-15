@@ -13,16 +13,18 @@ name: publish bottles
 # the formula version matches the bottle version, and uploads to GHCR. So we
 # fetch the merged PR's already-built bottle artifacts and hand them to it.
 #
-# SECURITY: relies on the `main` ruleset requiring approval AND "dismiss stale
-# approvals when new commits are pushed", so the merged commit == the reviewed
-# one. No privileged `pull_request_target`; we only publish merged `main`.
+# SECURITY: relies on Mergify merge protections requiring approvals AND the
+# inherited `dismiss_reviews` (stale approvals dropped on new commits), so the
+# merged commit == the reviewed one. No privileged `pull_request_target`; we
+# only publish merged `main`.
 
 on:
   push:
     branches:
       - main
-    # Only formula merges produce bottles. The bottle commit we push below also
-    # touches Formula/**, but "find merged PR" returns empty for it -> no loop.
+    # Only formula merges produce bottles. The bottle PR we open also merges a
+    # change to Formula/**, but its head branch is bottle/* -> the loop-breaker
+    # in the first step skips it.
     paths:
       - Formula/**
 
@@ -35,9 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read          # download the merged PR's bottle artifacts
-      contents: write        # push the bottle commit to main
+      contents: write        # push the bottle/* branch
       packages: write        # upload bottles to GHCR
-      pull-requests: read    # find the merged PR
+      pull-requests: write   # find the merged PR + open the bottle PR
     steps:
       - name: Resolve merged PR and its bottle build
         id: pr
@@ -45,17 +47,35 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # The PR this push merged. Empty for the bottle commit we push below
-          # (a direct push, no associated PR) -> the job no-ops -> no loop.
+          # The PR this push merged. Empty for direct pushes (none expected now).
           num=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq '.[0].number // empty')
-          echo "number=${num}" >> "$GITHUB_OUTPUT"
           if [ -z "$num" ]; then
             echo "No PR for this commit — nothing to publish."
             exit 0
           fi
-          head=$(gh pr view "$num" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
+          # One API call for both head ref name and oid.
+          pr_json=$(gh pr view "$num" --repo "$GITHUB_REPOSITORY" --json headRefName,headRefOid)
+          head_ref=$(jq -r .headRefName <<<"$pr_json")
+          head=$(jq -r .headRefOid <<<"$pr_json")
+          # Loop-breaker: the bottle PR's own merge is also a push to main
+          # touching Formula/**, which re-triggers this workflow. Its head ref
+          # starts with bottle/ -> nothing to publish. (headRefName persists in
+          # the PR record even after the branch is auto-deleted on merge.)
+          case "$head_ref" in
+            bottle/*)
+              echo "Merged PR #${num} is a bottle PR (${head_ref}) — nothing to publish."
+              exit 0
+              ;;
+          esac
           run=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/tests.yml/runs?event=pull_request&head_sha=${head}" \
                 --jq '.workflow_runs[0].id // empty')
+          if [ -z "$run" ]; then
+            # An empty id would make `gh run download ""` fall back to unrelated
+            # repo artifacts. Fail loudly instead of publishing the wrong bottles.
+            echo "::error::No tests.yml run found for PR #${num} (head ${head}); cannot publish bottles."
+            exit 1
+          fi
+          echo "number=${num}" >> "$GITHUB_OUTPUT"
           echo "run=${run}" >> "$GITHUB_OUTPUT"
           echo "Merged PR #${num} (head ${head}); bottles from tests.yml run ${run}"
 
@@ -92,8 +112,50 @@ jobs:
           HOMEBREW_GITHUB_PACKAGES_USER: ${{ github.repository_owner }}
         run: brew pr-upload --root-url="https://ghcr.io/v2/mergifyio/tap"
 
-      - name: Push bottle commit
+      - name: Open bottle PR
         if: steps.pr.outputs.number != ''
-        uses: Homebrew/actions/git-try-push@d0dd492210067c1b5f8857ab6c5dd52c29944e44 # main
-        with:
-          branch: main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # brew pr-upload edited + committed the bottle block in the tap repo
+          # that setup-homebrew cloned (NOT the workspace). Operate there.
+          tap_dir="$(brew --repository mergifyio/tap)"
+          cd "$tap_dir"
+          git fetch origin main
+          # Name the branch + PR after the formula pr-upload just bottled (the
+          # single Formula/*.rb in HEAD), so the flow works for any formula in
+          # the tap. `|| true` so a no-match doesn't abort under pipefail.
+          formula_file=$(git diff-tree --no-commit-id --name-only -r HEAD \
+                         | grep -E '^Formula/.+\.rb$' | head -1 || true)
+          if [ -z "$formula_file" ]; then
+            echo "Latest commit touches no Formula/*.rb — nothing to publish."
+            exit 0
+          fi
+          # Idempotent guard: if origin/main already carries this formula's exact
+          # content (bottle block included) there is nothing to publish. Covers
+          # both 'pr-upload made no commit' and a re-run after the bottle merged,
+          # even when main advanced underneath us.
+          if git diff --quiet HEAD origin/main -- "$formula_file"; then
+            echo "${formula_file} already matches origin/main — nothing to publish."
+            exit 0
+          fi
+          formula=$(basename "$formula_file" .rb)
+          branch="bottle/${formula}-${GITHUB_SHA::7}"
+          # Don't re-open if a bottle PR for this branch is already open (re-run).
+          if [ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json number --jq '.[0].number // empty')" ]; then
+            echo "A bottle PR for ${branch} is already open — nothing to do."
+            exit 0
+          fi
+          git remote set-url --push origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git branch -f "$branch" HEAD
+          git push --force origin "$branch"
+          # Title is conventional (chore:) and body is >=48 chars, to satisfy the
+          # inherited org merge protections. No backticks in the body (it is a
+          # double-quoted shell string).
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head "$branch" \
+            --title "chore: ${formula} bottle" \
+            --body "Automated bottle publish for ${formula}. Adds the precompiled bottle block, built and uploaded to GHCR by CI. Auto-merged via the bottle queue with no review required."
