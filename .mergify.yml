@@ -1,0 +1,59 @@
+extends: .github
+
+queue_rules:
+  # Bottle publish PRs opened by publish.yml. Auto-merged with no approval and
+  # no CI: the bottle block is already built + validated by `brew pr-upload`,
+  # and the PR is opened by GITHUB_TOKEN so tests.yml never runs on it. The
+  # single-file guard (#files = 1 + a single Formula/*.rb) keeps auto-merge to a
+  # one-formula bottle PR. A github-actions[bot] bottle PR that touches anything
+  # else (e.g. a single PR that bumped several formulae) matches no queue — it
+  # has no CI so it can't enter `default` either — and waits for a maintainer.
+  # Works for any single formula in the tap.
+  - name: bottle
+    queue_conditions:
+      - base = main
+      - author = github-actions[bot]
+      - head ~= ^bottle/
+      - files ~= ^Formula/.+\.rb$
+      - "#files = 1"
+    merge_method: squash
+
+  # Dependabot github-actions bumps: auto-merge once CI is green, no approval.
+  - name: automated updates
+    queue_conditions:
+      - base = main
+      - author = dependabot[bot]
+      - check-success = all-greens
+    merge_method: squash
+
+  # Everything else (human PRs). Catch-all -> MUST be last.
+  - name: default
+    queue_conditions:
+      - base = main
+      - check-success = all-greens
+    merge_method: squash
+
+merge_protections:
+  # Exempt the bottle PR by AUTHOR, not by head branch: the bottle PR is opened
+  # by github-actions[bot] (un-forgeable), whereas a `bottle/*` branch name can
+  # be pushed by any write-access user. Head-scoping here would let a human open
+  # a `bottle/*` PR that skips CI + the 2-approval gate and auto-merges via the
+  # default queue. (Only publish.yml's GITHUB_TOKEN PRs are github-actions[bot].)
+  - name: 🤖 Continuous Integration
+    if:
+      - author != github-actions[bot]
+    success_conditions:
+      - check-success = all-greens
+
+  - name: 👀 Review Requirements
+    if:
+      - author != github-actions[bot]
+      - author != dependabot[bot]
+    success_conditions:
+      - "#approved-reviews-by >= 2"
+
+merge_protections_settings:
+  reporting_method: deployments
+  # Auto-queue a PR once all its applicable merge protections pass — no manual
+  # "enable auto-merge" click, no explicit queue action (same as the monorepo).
+  auto_merge_conditions: true
