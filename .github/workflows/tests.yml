@@ -10,15 +10,15 @@ on:
 
 jobs:
   test-bot:
-    # Skip draft PRs: don't burn the (paid, macOS-heavy) bottle matrix on
-    # every draft sync. Marking the PR ready (ready_for_review) builds it.
+    # Skip drafts; marking the PR ready runs it.
     if: github.event.pull_request.draft == false
     strategy:
+      fail-fast: false
       matrix:
-        # macOS arm64 only — Homebrew no longer ships Intel-macOS bottles for
-        # our deps (pydantic/libyaml/rust stop at sonoma), so macos-15-intel
-        # can't be bottled. Intel Macs install via source build.
-        os: [ macos-26 ]
+        # The formula installs prebuilt binaries, so test-bot just downloads +
+        # tests one per platform (no compile, no bottling) — all four targets the
+        # formula pins: macOS arm64 + x86_64, Linux x86_64 + arm64.
+        os: [ macos-26, macos-15-intel ]
         include:
           - os: ubuntu-latest
             container: ghcr.io/homebrew/brew:main
@@ -27,11 +27,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     permissions:
-      actions: read
-      checks: read
       contents: read
-      packages: read
-      pull-requests: read
     steps:
       - name: Set up Homebrew
         id: set-up-homebrew
@@ -51,26 +47,8 @@ jobs:
       - run: brew test-bot --only-setup
 
       - run: brew test-bot --only-tap-syntax
-      - name: Base64-encode GITHUB_TOKEN for HOMEBREW_DOCKER_REGISTRY_TOKEN
-        id: base64-encode
-        if: github.event_name == 'pull_request'
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          base64_token=$(echo -n "${TOKEN}" | base64 | tr -d "\n")
-          echo "::add-mask::${base64_token}"
-          echo "token=${base64_token}" >> "${GITHUB_OUTPUT}"
-      - run: brew test-bot --only-formulae --root-url=https://ghcr.io/v2/mergifyio/tap
-        if: github.event_name == 'pull_request'
-        env:
-          HOMEBREW_DOCKER_REGISTRY_TOKEN: ${{ steps.base64-encode.outputs.token }}
 
-      - name: Upload bottles as artifact
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: bottles_${{ matrix.os }}
-          path: '*.bottle.*'
+      - run: brew test-bot --only-formulae
 
   all-greens:
     name: all-greens
