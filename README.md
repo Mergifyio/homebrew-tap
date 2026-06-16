@@ -28,8 +28,7 @@ The fully-qualified name taps and installs in one step. Then run `mergify --help
 
 The formula installs Mergify's **prebuilt, per-architecture binaries** from
 [mergify-cli releases](https://github.com/Mergifyio/mergify-cli/releases) — no
-compilation. Supported: macOS and Linux on `arm64` and `x86_64`. (Windows
-isn't in the tap — grab the `.zip` from the releases page.)
+compilation. Supported: macOS and Linux on `arm64` and `x86_64`.
 
 ## Updating
 
