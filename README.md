@@ -5,7 +5,9 @@ requests, CI insights, merge queue, scheduled freezes, and config management.
 
 ## Install
 
-    brew install mergifyio/tap/mergify-cli
+```shell
+brew install mergifyio/tap/mergify-cli
+```
 
 The fully-qualified name taps and installs in one step. Then run `mergify --help`.
 
@@ -14,9 +16,11 @@ The fully-qualified name taps and installs in one step. Then run `mergify --help
 > above trusts just this formula, so the command works as-is. To instead add
 > the tap and install by short name, trust it once:
 >
->     brew tap mergifyio/tap
->     brew trust mergifyio/tap
->     brew install mergify-cli
+> ```shell
+> brew tap mergifyio/tap
+> brew trust mergifyio/tap
+> brew install mergify-cli
+> ```
 >
 > See [Homebrew Tap Trust](https://docs.brew.sh/Tap-Trust).
 
@@ -29,7 +33,9 @@ isn't in the tap — grab the `.zip` from the releases page.)
 
 ## Updating
 
-    brew upgrade mergify-cli
+```shell
+brew upgrade mergify-cli
+```
 
 Manage it with Homebrew, **not** `mergify self-update` — self-update overwrites
 the Homebrew-managed binary and is reverted on the next `brew upgrade`.
