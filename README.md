@@ -24,12 +24,6 @@ The fully-qualified name taps and installs in one step. Then run `mergify --help
 >
 > See [Homebrew Tap Trust](https://docs.brew.sh/Tap-Trust).
 
-## What you get
-
-The formula installs Mergify's **prebuilt, per-architecture binaries** from
-[mergify-cli releases](https://github.com/Mergifyio/mergify-cli/releases) — no
-compilation. Supported: macOS and Linux on `arm64` and `x86_64`.
-
 ## Updating
 
 ```shell
