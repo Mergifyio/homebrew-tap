@@ -1,11 +1,14 @@
 extends: .github
 
 queue_rules:
-  # Dependabot github-actions bumps: auto-merge once CI is green, no approval.
+  # Bot bumps (Dependabot, mergify-ci-bot Homebrew autobump): auto-merge once
+  # CI is green, no approval.
   - name: automated updates
     queue_conditions:
       - base = main
-      - author = dependabot[bot]
+      - or:
+          - author = dependabot[bot]
+          - author = mergify-ci-bot
       - check-success = all-greens
     merge_method: squash
 
@@ -25,6 +28,7 @@ merge_protections:
   - name: 👀 Review Requirements
     if:
       - author != dependabot[bot]
+      - author != mergify-ci-bot
     success_conditions:
       - "#approved-reviews-by >= 2"
 
