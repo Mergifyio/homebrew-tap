@@ -38,6 +38,9 @@ class MergifyCli < Formula
 
   def install
     bin.install "mergify"
+    # `mergify completions <shell>` is pure clap introspection (no network),
+    # so it's safe to invoke at install time to ship first-class completions.
+    generate_completions_from_executable(bin/"mergify", "completions")
   end
 
   def caveats
@@ -51,5 +54,6 @@ class MergifyCli < Formula
   test do
     assert_match version.to_s, shell_output("#{bin}/mergify --version")
     assert_match "stacked pull requests", shell_output("#{bin}/mergify stack --help 2>&1")
+    assert_match "#compdef mergify", shell_output("#{bin}/mergify completions zsh")
   end
 end
