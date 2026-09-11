@@ -16,9 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         # The formula installs prebuilt binaries, so test-bot just downloads +
-        # tests one per platform (no compile, no bottling) — all four targets the
-        # formula pins: macOS arm64 + x86_64, Linux x86_64 + arm64.
-        os: [ macos-26, macos-15-intel ]
+        # tests one per platform (no compile, no bottling): macOS arm64, Linux
+        # x86_64 + arm64. macOS x86_64 runs in `test-macos-intel` below.
+        os: [ macos-26 ]
         include:
           - os: ubuntu-latest
             container: ghcr.io/homebrew/brew:main
@@ -50,11 +50,31 @@ jobs:
 
       - run: brew test-bot --only-formulae
 
+  test-macos-intel:
+    # Intel macOS is Homebrew Tier 3: rebuilt core formulae get no Intel bottle,
+    # so test-bot's own tooling (e.g. `brew style` -> shellcheck -> gmp) has to
+    # build from source and breaks. Lint and audit are platform-independent and
+    # already run in test-bot, so only install + test the x86_64 binary here.
+    if: github.event.pull_request.draft == false
+    runs-on: macos-15-intel
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@a657b8b0cd35d0f65cce41fce9b24cf054b49869 # main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: brew install --formula mergifyio/tap/mergify-cli
+
+      - run: brew test mergifyio/tap/mergify-cli
+
   all-greens:
     name: all-greens
     if: ${{ !cancelled() }}
     needs:
       - test-bot
+      - test-macos-intel
     runs-on: ubuntu-latest
     steps:
       - name: Verify all jobs succeeded
