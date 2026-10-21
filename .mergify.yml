@@ -11,6 +11,11 @@ queue_rules:
           - author = mergify-ci-bot
       - check-success = all-greens
     merge_method: squash
+    commit_message_format:
+      title: pr-title
+      body: pr-body
+      trailers:
+        - approved-by
 
   # Everything else (human PRs). Catch-all -> MUST be last.
   - name: default
@@ -18,6 +23,11 @@ queue_rules:
       - base = main
       - check-success = all-greens
     merge_method: squash
+    commit_message_format:
+      title: pr-title
+      body: pr-body
+      trailers:
+        - approved-by
 
 merge_protections:
   - name: 🤖 Continuous Integration
