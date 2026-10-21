@@ -40,7 +40,7 @@ merge_protections:
       - author != dependabot[bot]
       - author != mergify-ci-bot
     success_conditions:
-      - "#approved-reviews-by >= 2"
+      - "#approved-reviews-by >= 1"
 
 merge_protections_settings:
   reporting_method: deployments
