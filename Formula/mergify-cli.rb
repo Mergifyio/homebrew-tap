@@ -7,7 +7,7 @@ class MergifyCli < Formula
   # still auto-detects the version from the version-named asset URL. Declaring
   # `version` here would trip `brew audit --strict`'s "redundant with version
   # scanned from URL" check.
-  RELEASE = "2026.11.3".freeze
+  RELEASE = "2026.11.4".freeze
 
   livecheck do
     url :stable
@@ -17,22 +17,22 @@ class MergifyCli < Formula
   on_macos do
     on_arm do
       url "https://github.com/Mergifyio/mergify-cli/releases/download/#{RELEASE}/mergify-#{RELEASE}-aarch64-apple-darwin.tar.gz"
-      sha256 "5eaa49193886c50f6a2cff981c9d90f167496dff65528618f6b9d1baaa950973"
+      sha256 "611fd254805a12acb78a6cbc4d4765e79468a20f3335f4ef018f73644cbc0a5b"
     end
     on_intel do
       url "https://github.com/Mergifyio/mergify-cli/releases/download/#{RELEASE}/mergify-#{RELEASE}-x86_64-apple-darwin.tar.gz"
-      sha256 "dce90388504493e6bebf0c9b7186c11ce222ade227d1c5e0522d598a2a95911d"
+      sha256 "fd4b8871b00e340d6a0d6babfe335828a0baf41331ca566cc609e4d58b9a97f4"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/Mergifyio/mergify-cli/releases/download/#{RELEASE}/mergify-#{RELEASE}-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "6ae87fd78d2d0877b02e3d536b5a2429927041e97f95b286da6aff463da5a73b"
+      sha256 "696ff9f0467620ede0472ee5636d4e4ea1750c9b336e5119633e6d216f2b9ee3"
     end
     on_intel do
       url "https://github.com/Mergifyio/mergify-cli/releases/download/#{RELEASE}/mergify-#{RELEASE}-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "934e30c19df63f1cef2abe3b5c97e5fd3620b42cd5f2ee4e13c767f571aaf776"
+      sha256 "979a26870d4c2e8a06d15a36d95397255d3805c9c71004b1815bb93dad85810c"
     end
   end
 
